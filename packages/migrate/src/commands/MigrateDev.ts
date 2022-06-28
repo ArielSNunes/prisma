@@ -1,7 +1,8 @@
 import Debug from '@prisma/debug'
-import type { Command } from '@prisma/sdk'
 import {
   arg,
+  checkUnsupportedDataProxy,
+  Command,
   format,
   getCommandWithExecutor,
   getConfig,
@@ -11,7 +12,7 @@ import {
   isCi,
   isError,
   loadEnvFile,
-} from '@prisma/sdk'
+} from '@prisma/internals'
 import chalk from 'chalk'
 import fs from 'fs'
 import prompt from 'prompts'
@@ -89,6 +90,8 @@ ${chalk.bold('Examples')}
     if (isError(args)) {
       return this.help(args.message)
     }
+
+    await checkUnsupportedDataProxy('migrate dev', args, true)
 
     if (args['--help']) {
       return this.help()
@@ -327,10 +330,11 @@ ${chalk.green('Your database is now in sync with your schema.')}`,
           if (successfulSeeding) {
             console.info(`\n${process.platform === 'win32' ? '' : '🌱  '}The seed command has been executed.\n`)
           } else {
+            // TODO: Should we exit 1 here like in db seed and migrate reset?
             console.info() // empty line
           }
         } else {
-          // Only used to help users to setup their seeds from old way to new package.json config
+          // Only used to help users to set up their seeds from old way to new package.json config
           const schemaPath = await getSchemaPath(args['--schema'])
           // we don't want to output the returned warning message
           // but we still want to run it for `legacyTsNodeScriptWarning()`

@@ -16,10 +16,15 @@ export type QueryEngineInstance = {
   startTransaction(options: string, trace: string): Promise<string>
   commitTransaction(id: string, trace: string): Promise<string>
   rollbackTransaction(id: string, trace: string): Promise<string>
+  metrics(options: string): Promise<string>
 }
 
 export interface QueryEngineConstructor {
   new (config: QueryEngineConfig, logger: (err: string, log: string) => void): QueryEngineInstance
+}
+
+export interface LibraryLoader {
+  loadLibrary(): Promise<Library>
 }
 
 // Main
@@ -34,4 +39,8 @@ export type Library = {
    * This returns a string representation of `DMMF.Document`
    */
   dmmf: (datamodel: string) => Promise<string>
+  /**
+   * Artificial panic function that can be used to test the query engine
+   */
+  debugPanic: (message?: string) => Promise<never>
 }

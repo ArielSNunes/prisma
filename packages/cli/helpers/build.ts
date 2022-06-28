@@ -6,30 +6,10 @@ import path from 'path'
 import { promisify } from 'util'
 
 import type { BuildOptions } from '../../../helpers/compile/build'
-import { build, run } from '../../../helpers/compile/build'
+import { build } from '../../../helpers/compile/build'
+import { run } from '../../../helpers/compile/run'
 
 const copyFile = promisify(fs.copyFile)
-
-/**
- * The CLI wants to bundle everything, including @prisma/sdk and @prisma/studio.
- * For that reason, it sets all its dependencies as devDependencies.
- *
- * Problem: @prisma/studio has a peerDependency to @prisma/sdk. Because the CLI
- * doesn't have @prisma/sdk as dependency, but rather a devDependency, esbuild
- * will bundle @prisma/studio but mark its imports to @prisma/sdk as external.
- *
- * Solution: Since that is not our intent, and we want @prisma/studio to share
- * the same @prisma/sdk version that is bundled in the CLI, we have this plugin.
- */
-const resolveHelperPlugin: esbuild.Plugin = {
-  name: 'resolveHelperPlugin',
-  setup(build) {
-    // for any import of @prisma/sdk, resolve to this one
-    build.onResolve({ filter: /^@prisma\/sdk$/ }, () => {
-      return { path: require.resolve('@prisma/sdk') }
-    })
-  },
-}
 
 /**
  * Manages the extra actions that are needed for the CLI to work
@@ -70,15 +50,17 @@ const cliLifecyclePlugin: esbuild.Plugin = {
 
 // we define the config for cli
 const cliBuildConfig: BuildOptions = {
+  name: 'cli',
   entryPoints: ['src/bin.ts'],
   outfile: 'build/index',
   external: ['@prisma/engines'],
-  plugins: [resolveHelperPlugin, cliLifecyclePlugin],
+  plugins: [cliLifecyclePlugin],
   bundle: true,
 }
 
 // we define the config for preinstall
 const preinstallBuildConfig: BuildOptions = {
+  name: 'preinstall',
   entryPoints: ['scripts/preinstall.js'],
   outfile: 'preinstall/index',
   bundle: true,
@@ -86,6 +68,7 @@ const preinstallBuildConfig: BuildOptions = {
 
 // we define the config for install
 const installBuildConfig: BuildOptions = {
+  name: 'install',
   entryPoints: ['scripts/install.js'],
   outfile: 'install/index',
   bundle: true,

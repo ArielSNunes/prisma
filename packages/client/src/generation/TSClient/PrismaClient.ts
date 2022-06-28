@@ -4,6 +4,7 @@ import indent from 'indent-string'
 import type { DMMFHelper } from '../../runtime/dmmf'
 import { capitalize, lowerCase } from '../../runtime/utils/common'
 import type { InternalDatasource } from '../../runtime/utils/printDatasources'
+import { runtimeImport } from '../utils/runtimeImport'
 import type { DatasourceOverwrite } from './../extractSqliteSources'
 import { TAB_SIZE } from './constants'
 import { Datasources } from './Datasources'
@@ -32,11 +33,10 @@ function interactiveTransactionDefinition(this: PrismaClientClass) {
     return ''
   }
 
-  const txPrismaClient = `Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use'>`
   const txOptions = `{ maxWait?: number, timeout?: number }`
 
   return `
-  $transaction<R>(fn: (prisma: ${txPrismaClient}) => Promise<R>, options?: ${txOptions}): Promise<R>;`
+  $transaction<R>(fn: (prisma: Prisma.TransactionClient) => Promise<R>, options?: ${txOptions}): Promise<R>;`
 }
 
 function queryRawDefinition(this: PrismaClientClass) {
@@ -99,6 +99,26 @@ function executeRawDefinition(this: PrismaClientClass) {
    * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
    */
   $executeRawUnsafe<T = unknown>(query: string, ...values: any[]): PrismaPromise<number>;`
+}
+
+function metricDefinition(this: PrismaClientClass) {
+  if (!this.generator?.previewFeatures.includes('metrics')) {
+    return ''
+  }
+
+  return `
+  /**
+   * Gives access to the client metrics in json or prometheus format.
+   * 
+   * @example
+   * \`\`\`
+   * const metrics = await prisma.$metrics.json()
+   * // or
+   * const metrics = await prisma.$metrics.prometheus()
+   * \`\`\`
+   */
+  readonly $metrics: runtime.${runtimeImport('MetricsClient')};
+  `
 }
 
 function runCommandRawDefinition(this: PrismaClientClass) {
@@ -214,6 +234,7 @@ ${[
   batchingTransactionDefinition.bind(this)(),
   interactiveTransactionDefinition.bind(this)(),
   runCommandRawDefinition.bind(this)(),
+  metricDefinition.bind(this)(),
 ]
   .join('\n')
   .trim()}
@@ -269,7 +290,8 @@ export type ErrorFormat = 'pretty' | 'colorless' | 'minimal'
 export interface PrismaClientOptions {
   /**
    * Configure findUnique/findFirst to throw an error if the query returns null. 
-   *  * @example
+   * @deprecated since 4.0.0. Use \`findUniqueOrThrow\`/\`findFirstOrThrow\` methods instead.
+   * @example
    * \`\`\`
    * // Reject on both findUnique/findFirst
    * rejectOnNotFound: true
@@ -357,6 +379,7 @@ export type PrismaAction =
   | 'aggregate'
   | 'count'
   | 'runCommandRaw'
+  | 'findRaw'
 
 /**
  * These options are being passed in to the middleware as "params"
@@ -378,6 +401,17 @@ export type Middleware<T = any> = (
 ) => Promise<T>
 
 // tested in getLogLevel.test.ts
-export function getLogLevel(log: Array<LogLevel | LogDefinition>): LogLevel | undefined; `
+export function getLogLevel(log: Array<LogLevel | LogDefinition>): LogLevel | undefined;
+${
+  this.generator?.previewFeatures.includes('interactiveTransactions')
+    ? `
+
+/**
+ * \`PrismaClient\` proxy available in interactive transactions.
+ */
+export type TransactionClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use'>
+`
+    : ''
+}`
   }
 }

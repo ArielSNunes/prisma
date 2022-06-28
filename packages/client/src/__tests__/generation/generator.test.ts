@@ -1,4 +1,11 @@
-import { ClientEngineType, getClientEngineType, getGenerator, getPackedPackage, parseEnvValue } from '@prisma/sdk'
+import {
+  ClientEngineType,
+  getClientEngineType,
+  getGenerator,
+  getPackedPackage,
+  parseEnvValue,
+  serializeQueryEngineName,
+} from '@prisma/internals'
 import fs from 'fs'
 import path from 'path'
 import rimraf from 'rimraf'
@@ -94,6 +101,7 @@ describe('generator', () => {
   })
 
   test('denylist from engine validation', async () => {
+    expect.assertions(1)
     const prismaClientTarget = path.join(__dirname, './node_modules/@prisma/client')
     // Make sure, that nothing is cached.
     try {
@@ -115,8 +123,9 @@ describe('generator', () => {
         skipDownload: true,
       })
     } catch (e) {
-      expect(stripAnsi(e.message)).toMatchInlineSnapshot(`
-        Schema parsing
+      expect(serializeQueryEngineName(stripAnsi(e.message))).toMatchInlineSnapshot(`
+        Get DMMF: Schema parsing - Error while interacting with query-engine-NORMALIZED
+        Error code: P1012
         error: Error validating model "public": The model name \`public\` is invalid. It is a reserved name. Please change it. Read more at https://pris.ly/d/naming-models
           -->  schema.prisma:10
            | 
@@ -135,6 +144,8 @@ describe('generator', () => {
            | 
 
         Validation Error Count: 2
+
+        Prisma CLI Version : 0.0.0
       `)
     }
   })

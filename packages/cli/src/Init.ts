@@ -1,41 +1,26 @@
 import type { ConnectorType } from '@prisma/generator-helper'
-import type { Command } from '@prisma/sdk'
 import {
   arg,
   canConnectToDatabase,
+  checkUnsupportedDataProxy,
+  Command,
   format,
   getCommandWithExecutor,
   HelpError,
   link,
   logger,
   protocolToConnectorType,
-} from '@prisma/sdk'
+} from '@prisma/internals'
 import chalk from 'chalk'
 import dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
+import { match, P } from 'ts-pattern'
 import { isError } from 'util'
 
 import { printError } from './utils/prompt/utils/print'
 
 export const defaultSchema = (provider: ConnectorType = 'postgresql') => {
-  // add preview flag
-  if (provider === 'cockroachdb') {
-    return `// This is your Prisma schema file,
-    // learn more about it in the docs: https://pris.ly/d/prisma-schema
-    
-    generator client {
-      provider        = "prisma-client-js"
-      previewFeatures = ["${provider}"]
-    }
-    
-    datasource db {
-      provider = "${provider}"
-      url      = env("DATABASE_URL")
-    }
-    `
-  }
-
   return `// This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
@@ -58,7 +43,7 @@ export const defaultEnv = (
     ? `# Environment variables declared in this file are automatically made available to Prisma.
 # See the documentation for more detail: https://pris.ly/d/prisma-schema#accessing-environment-variables-from-the-schema
 
-# Prisma supports the native connection string format for PostgreSQL, MySQL, SQLite, SQL Server, MongoDB and CockroachDB (Preview).
+# Prisma supports the native connection string format for PostgreSQL, MySQL, SQLite, SQL Server, MongoDB and CockroachDB.
 # See the documentation for all the connection string options: https://pris.ly/d/connection-strings\n\n`
     : ''
   env += `DATABASE_URL="${url}"`
@@ -114,7 +99,7 @@ export class Init implements Command {
   }
 
   private static help = format(`
-  Setup a new Prisma project
+  Set up a new Prisma project
     
   ${chalk.bold('Usage')}
 
@@ -127,13 +112,13 @@ export class Init implements Command {
 
   ${chalk.bold('Examples')}
 
-  Setup a new Prisma project with PostgreSQL (default)
+  Set up a new Prisma project with PostgreSQL (default)
     ${chalk.dim('$')} prisma init
 
-  Setup a new Prisma project and specify MySQL as the datasource provider to use
+  Set up a new Prisma project and specify MySQL as the datasource provider to use
     ${chalk.dim('$')} prisma init --datasource-provider mysql
   
-  Setup a new Prisma project and specify the url that will be used
+  Set up a new Prisma project and specify the url that will be used
     ${chalk.dim('$')} prisma init --url mysql://user:password@localhost:3306/mydb
   `)
 
@@ -149,6 +134,8 @@ export class Init implements Command {
     if (isError(args) || args['--help']) {
       return this.help()
     }
+
+    await checkUnsupportedDataProxy('init', args, false)
 
     /**
      * Validation
@@ -189,39 +176,51 @@ export class Init implements Command {
       process.exit(1)
     }
 
-    let provider: ConnectorType
-    let url: string | undefined
-
-    if (args['--url']) {
-      const canConnect = await canConnectToDatabase(args['--url'])
-      if (canConnect !== true) {
-        const { code, message } = canConnect
-
-        // P1003 means that the db doesn't exist but we can connect
-        if (code !== 'P1003') {
-          if (code) {
-            throw new Error(`${code}: ${message}`)
-          } else {
-            throw new Error(message)
+    const { provider, url } = await match(args)
+      .with(
+        {
+          '--datasource-provider': P.when((provider): provider is string => Boolean(provider)),
+        },
+        (input) => {
+          const providerLowercase = input['--datasource-provider'].toLowerCase()
+          if (!['postgresql', 'mysql', 'sqlserver', 'sqlite', 'mongodb', 'cockroachdb'].includes(providerLowercase)) {
+            throw new Error(
+              `Provider "${args['--datasource-provider']}" is invalid or not supported. Try again with "postgresql", "mysql", "sqlite", "sqlserver", "mongodb" or "cockroachdb".`,
+            )
           }
-        }
-      }
+          const provider = providerLowercase as ConnectorType
+          const url = defaultURL(provider)
+          return Promise.resolve({ provider, url })
+        },
+      )
+      .with(
+        {
+          '--url': P.when((url): url is string => Boolean(url)),
+        },
+        async (input) => {
+          const url = input['--url']
+          const canConnect = await canConnectToDatabase(url)
+          if (canConnect !== true) {
+            const { code, message } = canConnect
 
-      provider = protocolToConnectorType(`${args['--url'].split(':')[0]}:`)
-      url = args['--url']
-    } else if (args['--datasource-provider']) {
-      const providerLowercase = args['--datasource-provider'].toLowerCase()
-      if (!['postgresql', 'mysql', 'sqlserver', 'sqlite', 'mongodb', 'cockroachdb'].includes(providerLowercase)) {
-        throw new Error(
-          `Provider "${args['--datasource-provider']}" is invalid or not supported. Try again with "postgresql", "mysql", "sqlite", "sqlserver", "mongodb" or "cockroachdb".`,
-        )
-      }
-      provider = providerLowercase as ConnectorType
-      url = defaultURL(provider)
-    } else {
-      // Default to PostgreSQL
-      provider = 'postgresql'
-    }
+            // P1003 means that the db doesn't exist but we can connect
+            if (code !== 'P1003') {
+              if (code) {
+                throw new Error(`${code}: ${message}`)
+              } else {
+                throw new Error(message)
+              }
+            }
+          }
+
+          const provider = protocolToConnectorType(`${url.split(':')[0]}:`)
+          return { provider, url }
+        },
+      )
+      .otherwise(() => {
+        // Default to PostgreSQL
+        return Promise.resolve({ provider: 'postgresql' as ConnectorType, url: undefined })
+      })
 
     /**
      * Validation successful? Let's create everything!
@@ -263,7 +262,7 @@ export class Init implements Command {
         warnings.push(
           `${chalk.yellow(
             'warn',
-          )} You already have a .gitignore. Don't forget to exclude .env to not commit any secret.`,
+          )} You already have a .gitignore file. Don't forget to add \`.env\` in it to not commit any private information.`,
         )
       } else {
         console.error('Failed to write .gitignore file, reason: ', e)
@@ -295,7 +294,7 @@ export class Init implements Command {
             'schema.prisma',
           )} to match your database: ${chalk.green('postgresql')}, ${chalk.green('mysql')}, ${chalk.green(
             'sqlite',
-          )}, ${chalk.green('sqlserver')}, ${chalk.green('mongodb')} or ${chalk.green('cockroachdb')} (Preview).`,
+          )}, ${chalk.green('sqlserver')}, ${chalk.green('mongodb')} or ${chalk.green('cockroachdb')}.`,
         )
       }
 
