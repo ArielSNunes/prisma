@@ -200,6 +200,29 @@ Object {
     "enumTypes": Object {
       "prisma": Array [
         Object {
+          "name": "QueryMode",
+          "values": Array [
+            "default",
+            "insensitive",
+          ],
+        },
+        Object {
+          "name": "SortOrder",
+          "values": Array [
+            "asc",
+            "desc",
+          ],
+        },
+        Object {
+          "name": "TransactionIsolationLevel",
+          "values": Array [
+            "ReadUncommitted",
+            "ReadCommitted",
+            "RepeatableRead",
+            "Serializable",
+          ],
+        },
+        Object {
           "name": "User1ScalarFieldEnum",
           "values": Array [
             "id",
@@ -217,22 +240,9 @@ Object {
             "isAdmin",
           ],
         },
-        Object {
-          "name": "SortOrder",
-          "values": Array [
-            "asc",
-            "desc",
-          ],
-        },
-        Object {
-          "name": "QueryMode",
-          "values": Array [
-            "default",
-            "insensitive",
-          ],
-        },
       ],
     },
+    "fieldRefTypes": Object {},
     "inputObjectTypes": Object {
       "prisma": Array [
         Object {
@@ -365,6 +375,9 @@ Object {
               "name": "isAdmin",
             },
           ],
+          "meta": Object {
+            "source": "User1",
+          },
           "name": "User1WhereInput",
         },
         Object {
@@ -706,6 +719,9 @@ Object {
               "name": "isAdmin",
             },
           ],
+          "meta": Object {
+            "source": "User1",
+          },
           "name": "User1ScalarWhereWithAggregatesInput",
         },
         Object {
@@ -838,6 +854,9 @@ Object {
               "name": "isAdmin",
             },
           ],
+          "meta": Object {
+            "source": "User2",
+          },
           "name": "User2WhereInput",
         },
         Object {
@@ -1179,6 +1198,9 @@ Object {
               "name": "isAdmin",
             },
           ],
+          "meta": Object {
+            "source": "User2",
+          },
           "name": "User2ScalarWhereWithAggregatesInput",
         },
         Object {
@@ -6745,10 +6767,10 @@ Object {
     "enumTypes": Object {
       "prisma": Array [
         Object {
-          "name": "UserScalarFieldEnum",
+          "name": "QueryMode",
           "values": Array [
-            "id",
-            "email",
+            "default",
+            "insensitive",
           ],
         },
         Object {
@@ -6759,14 +6781,24 @@ Object {
           ],
         },
         Object {
-          "name": "QueryMode",
+          "name": "TransactionIsolationLevel",
           "values": Array [
-            "default",
-            "insensitive",
+            "ReadUncommitted",
+            "ReadCommitted",
+            "RepeatableRead",
+            "Serializable",
+          ],
+        },
+        Object {
+          "name": "UserScalarFieldEnum",
+          "values": Array [
+            "id",
+            "email",
           ],
         },
       ],
     },
+    "fieldRefTypes": Object {},
     "inputObjectTypes": Object {
       "prisma": Array [
         Object {
@@ -6863,6 +6895,9 @@ Object {
               "name": "email",
             },
           ],
+          "meta": Object {
+            "source": "User",
+          },
           "name": "UserWhereInput",
         },
         Object {
@@ -7115,6 +7150,9 @@ Object {
               "name": "email",
             },
           ],
+          "meta": Object {
+            "source": "User",
+          },
           "name": "UserScalarWhereWithAggregatesInput",
         },
         Object {
@@ -10472,10 +10510,26 @@ Object {
           ],
         },
         Object {
-          "name": "UserScalarFieldEnum",
+          "name": "QueryMode",
           "values": Array [
-            "id",
-            "email",
+            "default",
+            "insensitive",
+          ],
+        },
+        Object {
+          "name": "SortOrder",
+          "values": Array [
+            "asc",
+            "desc",
+          ],
+        },
+        Object {
+          "name": "TransactionIsolationLevel",
+          "values": Array [
+            "ReadUncommitted",
+            "ReadCommitted",
+            "RepeatableRead",
+            "Serializable",
           ],
         },
         Object {
@@ -10497,21 +10551,15 @@ Object {
           ],
         },
         Object {
-          "name": "SortOrder",
+          "name": "UserScalarFieldEnum",
           "values": Array [
-            "asc",
-            "desc",
-          ],
-        },
-        Object {
-          "name": "QueryMode",
-          "values": Array [
-            "default",
-            "insensitive",
+            "id",
+            "email",
           ],
         },
       ],
     },
+    "fieldRefTypes": Object {},
     "inputObjectTypes": Object {
       "prisma": Array [
         Object {
@@ -10663,6 +10711,9 @@ Object {
               "name": "published",
             },
           ],
+          "meta": Object {
+            "source": "Post",
+          },
           "name": "PostWhereInput",
         },
         Object {
@@ -11017,6 +11068,9 @@ Object {
               "name": "published",
             },
           ],
+          "meta": Object {
+            "source": "Post",
+          },
           "name": "PostScalarWhereWithAggregatesInput",
         },
         Object {
@@ -11126,6 +11180,9 @@ Object {
               "name": "posts",
             },
           ],
+          "meta": Object {
+            "source": "User",
+          },
           "name": "UserWhereInput",
         },
         Object {
@@ -11403,6 +11460,9 @@ Object {
               "name": "email",
             },
           ],
+          "meta": Object {
+            "source": "User",
+          },
           "name": "UserScalarWhereWithAggregatesInput",
         },
         Object {
@@ -11535,6 +11595,9 @@ Object {
               "name": "isAdmin",
             },
           ],
+          "meta": Object {
+            "source": "User1",
+          },
           "name": "User1WhereInput",
         },
         Object {
@@ -11876,6 +11939,9 @@ Object {
               "name": "isAdmin",
             },
           ],
+          "meta": Object {
+            "source": "User1",
+          },
           "name": "User1ScalarWhereWithAggregatesInput",
         },
         Object {
@@ -12008,6 +12074,9 @@ Object {
               "name": "isAdmin",
             },
           ],
+          "meta": Object {
+            "source": "User2",
+          },
           "name": "User2WhereInput",
         },
         Object {
@@ -12349,6 +12418,9 @@ Object {
               "name": "isAdmin",
             },
           ],
+          "meta": Object {
+            "source": "User2",
+          },
           "name": "User2ScalarWhereWithAggregatesInput",
         },
         Object {
@@ -18312,6 +18384,9 @@ Object {
               "name": "published",
             },
           ],
+          "meta": Object {
+            "source": "Post",
+          },
           "name": "PostScalarWhereInput",
         },
         Object {
@@ -22878,9 +22953,9 @@ Object {
 }
 `;
 
-exports[`getDMMF big schema 1`] = `132028293`;
+exports[`getDMMF big schema 1`] = `132318758`;
 
-exports[`getDMMF chinook introspected schema 1`] = `884636`;
+exports[`getDMMF chinook introspected schema 1`] = `885639`;
 
 exports[`getDMMF simple model, mongodb 1`] = `
 Object {
@@ -23009,21 +23084,22 @@ Object {
           ],
         },
         Object {
-          "name": "SortOrder",
-          "values": Array [
-            "asc",
-            "desc",
-          ],
-        },
-        Object {
           "name": "QueryMode",
           "values": Array [
             "default",
             "insensitive",
           ],
         },
+        Object {
+          "name": "SortOrder",
+          "values": Array [
+            "asc",
+            "desc",
+          ],
+        },
       ],
     },
+    "fieldRefTypes": Object {},
     "inputObjectTypes": Object {
       "prisma": Array [
         Object {
@@ -23120,6 +23196,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AWhereInput",
         },
         Object {
@@ -23372,6 +23451,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AScalarWhereWithAggregatesInput",
         },
         Object {
@@ -26321,8 +26403,18 @@ Object {
             "desc",
           ],
         },
+        Object {
+          "name": "TransactionIsolationLevel",
+          "values": Array [
+            "ReadUncommitted",
+            "ReadCommitted",
+            "RepeatableRead",
+            "Serializable",
+          ],
+        },
       ],
     },
+    "fieldRefTypes": Object {},
     "inputObjectTypes": Object {
       "prisma": Array [
         Object {
@@ -26419,6 +26511,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AWhereInput",
         },
         Object {
@@ -26671,6 +26766,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AScalarWhereWithAggregatesInput",
         },
         Object {
@@ -29722,6 +29820,7 @@ Object {
         },
       ],
     },
+    "fieldRefTypes": Object {},
     "inputObjectTypes": Object {
       "prisma": Array [
         Object {
@@ -29818,6 +29917,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AWhereInput",
         },
         Object {
@@ -30070,6 +30172,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AScalarWhereWithAggregatesInput",
         },
         Object {
@@ -32836,6 +32941,13 @@ Object {
           ],
         },
         Object {
+          "name": "QueryMode",
+          "values": Array [
+            "default",
+            "insensitive",
+          ],
+        },
+        Object {
           "name": "SortOrder",
           "values": Array [
             "asc",
@@ -32843,14 +32955,17 @@ Object {
           ],
         },
         Object {
-          "name": "QueryMode",
+          "name": "TransactionIsolationLevel",
           "values": Array [
-            "default",
-            "insensitive",
+            "ReadUncommitted",
+            "ReadCommitted",
+            "RepeatableRead",
+            "Serializable",
           ],
         },
       ],
     },
+    "fieldRefTypes": Object {},
     "inputObjectTypes": Object {
       "prisma": Array [
         Object {
@@ -32947,6 +33062,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AWhereInput",
         },
         Object {
@@ -33199,6 +33317,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AScalarWhereWithAggregatesInput",
         },
         Object {
@@ -36278,8 +36399,19 @@ Object {
             "desc",
           ],
         },
+        Object {
+          "name": "TransactionIsolationLevel",
+          "values": Array [
+            "ReadUncommitted",
+            "ReadCommitted",
+            "RepeatableRead",
+            "Serializable",
+            "Snapshot",
+          ],
+        },
       ],
     },
+    "fieldRefTypes": Object {},
     "inputObjectTypes": Object {
       "prisma": Array [
         Object {
@@ -36376,6 +36508,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AWhereInput",
         },
         Object {
@@ -36628,6 +36763,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AScalarWhereWithAggregatesInput",
         },
         Object {
@@ -39668,8 +39806,15 @@ Object {
             "desc",
           ],
         },
+        Object {
+          "name": "TransactionIsolationLevel",
+          "values": Array [
+            "Serializable",
+          ],
+        },
       ],
     },
+    "fieldRefTypes": Object {},
     "inputObjectTypes": Object {
       "prisma": Array [
         Object {
@@ -39766,6 +39911,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AWhereInput",
         },
         Object {
@@ -40018,6 +40166,9 @@ Object {
               "name": "name",
             },
           ],
+          "meta": Object {
+            "source": "A",
+          },
           "name": "AScalarWhereWithAggregatesInput",
         },
         Object {

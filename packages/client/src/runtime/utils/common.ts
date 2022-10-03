@@ -3,6 +3,7 @@ import Decimal from 'decimal.js'
 import indent from 'indent-string'
 import leven from 'js-levenshtein'
 
+import { FieldRefImpl } from '../core/model/FieldRef'
 import { DMMFHelper } from '../dmmf'
 import type { DMMF } from '../dmmf-types'
 import { objectEnumNames, ObjectEnumValue, objectEnumValues } from '../object-enums'
@@ -141,6 +142,10 @@ export function getGraphQLType(value: any, inputType?: DMMF.SchemaArgInputType):
     return value._getName()
   }
 
+  if (value instanceof FieldRefImpl) {
+    return value._toGraphQLInputType()
+  }
+
   if (Array.isArray(value)) {
     let scalarTypes = value.reduce((acc, val) => {
       const type = getGraphQLType(val, inputType)
@@ -193,7 +198,7 @@ export function isValidEnumValue(value: any, inputType?: DMMF.SchemaArgInputType
   // Check if it is an object-valued enum, and if it is, whether the provided
   // value is the correct singleton instance of the corresponding class.
   if (inputType?.namespace === 'prisma' && objectEnumNames.includes(enumType.name)) {
-    const name = value?.constructor.name
+    const name = value?.constructor?.name
     return typeof name === 'string' && objectEnumValues.instances[name] === value && enumType.values.includes(name)
   }
 

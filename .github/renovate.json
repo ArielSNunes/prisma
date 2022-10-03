@@ -10,10 +10,11 @@
     "@prisma/engines",
     "@prisma/engines-version",
     "@prisma/fetch-engine",
-    "@prisma/get-platform"
+    "@prisma/get-platform",
+    "@prisma/prisma-fmt-wasm"
   ],
   "constraints": {
-    "pnpm": "6"
+    "pnpm": "7"
   },
   "packageRules": [
     {
@@ -107,6 +108,19 @@
       "ignoreUnstable": false,
       "packageNames": ["node-fetch"],
       "schedule": ["before 8am on Wednesday"]
+    },
+    {
+      "groupName": "tsd",
+      "packageNames": ["tsd"]
+    },
+    {
+      "groupName": "sqlite-async",
+      "packageNames": ["sqlite-async"]
+    },
+    {
+      "groupName": "@swc/core for internals",
+      "paths": ["packages/internals/**"],
+      "packageNames": ["@swc/core"]
     },
     {
       "groupName": "react-prisma",

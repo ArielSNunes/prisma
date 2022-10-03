@@ -1,12 +1,15 @@
 import type { DataSource, GeneratorConfig } from '@prisma/generator-helper'
 
+import * as Transaction from './Transaction'
+
 // Events
-export type QueryEngineEvent = QueryEngineLogEvent | QueryEngineQueryEvent | QueryEnginePanicEvent
+export type QueryEngineEvent = QueryEngineLogEvent | QueryEngineQueryEvent | QueryEnginePanicEvent | EngineSpanEvent
 
 export type QueryEngineLogEvent = {
   level: string
   module_path: string
   message: string
+  span?: boolean
 }
 
 export type QueryEngineQueryEvent = {
@@ -29,6 +32,23 @@ export type QueryEnginePanicEvent = {
   column: string
 }
 
+export type EngineSpanEvent = {
+  span: boolean
+  spans: EngineSpan[]
+}
+
+export type EngineSpan = {
+  span: boolean
+  name: string
+  trace_id: string
+  span_id: string
+  parent_span_id: string
+  start_time: [number, number]
+  end_time: [number, number]
+  attributes?: Record<string, string>
+  links?: { trace_id: string; span_id: string }[]
+}
+
 // Configuration
 export type QueryEngineLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'off'
 
@@ -39,7 +59,7 @@ export type QueryEngineConfig = {
   logQueries: boolean
   ignoreEnvVarErrors: boolean
   datasourceOverrides?: Record<string, string>
-  env: NodeJS.ProcessEnv | Record<string, string>
+  env: Record<string, string | undefined>
   logLevel: QueryEngineLogLevel
   telemetry?: QueryEngineTelemetry
 }
@@ -68,13 +88,14 @@ export type QueryEngineRequestHeaders = {
 export type QueryEngineBatchRequest = {
   batch: QueryEngineRequest[]
   transaction: boolean
+  isolationLevel?: Transaction.IsolationLevel
 }
 
 export type GetConfigOptions = {
   datamodel: string
   ignoreEnvVarErrors: boolean
   datasourceOverrides: Record<string, string>
-  env: NodeJS.ProcessEnv | Record<string, string>
+  env: Record<string, string | undefined>
 }
 
 export type GetDMMFOptions = {

@@ -14,6 +14,7 @@ import { ErrorArea, isExecaErrorCausedByRustPanic, RustPanic } from '../panic'
 import { addVersionDetailsToErrorMessage } from './errorHelpers'
 import {
   createDebugErrorType,
+  createSchemaValidationError,
   loadNodeAPILibrary,
   preliminaryBinaryPipeline,
   preliminaryNodeAPIPipeline,
@@ -61,8 +62,6 @@ type GetDmmfErrorInit = {
 
 export class GetDmmfError extends Error {
   constructor(params: GetDmmfErrorInit) {
-    const headline = chalk.redBright.bold('Get DMMF: ')
-
     const constructedErrorMessage = match(params)
       .with({ _tag: 'parsed' }, ({ errorCode, message, reason }) => {
         const errorCodeMessage = errorCode ? `Error code: ${errorCode}` : ''
@@ -76,8 +75,10 @@ ${message}`
 ${detailsHeader} ${message}`
       })
       .exhaustive()
+    const errorMessageWithContext = `${constructedErrorMessage}
+[Context: getDmmf]`
 
-    super(addVersionDetailsToErrorMessage(`${headline}${constructedErrorMessage}`))
+    super(addVersionDetailsToErrorMessage(errorMessageWithContext))
   }
 }
 
@@ -116,7 +117,7 @@ async function getDmmfNodeAPI(options: GetDMMFOptions) {
 
   /**
    * - load the query engine library
-   * - create a temporary datamodel file if one is not provided
+   * - create a temporary schema file if one is not provided
    * - run the "dmmf" command
    * - JSON-deserialize the "dmmf" output
    */
@@ -159,7 +160,7 @@ async function getDmmfNodeAPI(options: GetDMMFOptions) {
           },
           (e) => ({
             type: 'node-api' as const,
-            reason: 'Error while interacting with query-engine-node-api library',
+            reason: 'Error (query-engine-node-api library)',
             error: e as Error,
             datamodel,
           }),
@@ -229,7 +230,7 @@ async function getDmmfNodeAPI(options: GetDMMFOptions) {
           return new GetDmmfError({
             _tag: 'parsed',
             message: defaultMessage,
-            reason: `${chalk.redBright.bold('Schema parsing')} - ${e.reason}`,
+            reason: createSchemaValidationError(e.reason),
             errorCode,
           })
         }),
@@ -278,7 +279,7 @@ async function getDmmfBinary(options: GetDMMFOptions): Promise<DMMF.Document> {
            * to serialize big datamodels.
            */
           PRISMA_DML_PATH: tempDatamodelPath,
-          RUST_BACKTRACE: '1',
+          RUST_BACKTRACE: process.env.RUST_BACKTRACE ?? '1',
           ...(process.env.NO_COLOR ? {} : { CLICOLOR_FORCE: '1' }),
         },
         maxBuffer: MAX_BUFFER,
@@ -301,7 +302,7 @@ async function getDmmfBinary(options: GetDMMFOptions): Promise<DMMF.Document> {
         },
         (e) => ({
           type: 'execa' as const,
-          reason: 'Error while interacting with query-engine binary',
+          reason: 'Error (query-engine binary)',
           error: e as execa.ExecaError,
         }),
       )
@@ -415,7 +416,7 @@ async function getDmmfBinary(options: GetDMMFOptions): Promise<DMMF.Document> {
           return new GetDmmfError({
             _tag: 'parsed',
             message: defaultMessage,
-            reason: `${chalk.redBright.bold('Schema parsing')} - ${e.reason}`,
+            reason: createSchemaValidationError(e.reason),
             errorCode,
           })
         }),

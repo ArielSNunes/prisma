@@ -3,7 +3,8 @@
 set -ex
 
 # Install pnpm
-npm i --silent -g pnpm@6 --unsafe-perm # TODO: is this unsafe-perm needed?
+npm i --silent -g pnpm@7 --unsafe-perm
+# --usafe-perm to allow install scripts
 
 # Install packages
 pnpm i
@@ -21,19 +22,16 @@ then
     echo "Testing was skipped as it's an integration branch. For tests, check GitHub Actions or the Buildkite testing pipeline https://buildkite.com/prisma/test-prisma-typescript"
 else
     echo "Start testing..."
+    # New client test suite
+    pnpm run --filter "@prisma/client" test:functional
+
     # Run test for all packages
     pnpm run test
 
-    # New client test suite
-    # 
-    # TODO make make side effect free and isolated since it can right now, only be ran after `pnpm run test`
-    # because it drops the postgresql `tests` database which result in the following error during `pnpm run test` if `test:functional` are run before
-    # FAIL  src/__tests__/integration/postgresql/runtime.test.ts
-    # FAIL  src/__tests__/integration/postgresql/introspection.test.ts
-    #  error: database "tests" does not exist
-    # Test Suites: 2 failed, 8 passed, 10 total
-    # https://buildkite.com/prisma/release-prisma-typescript/builds/6514
-    pnpm run test:functional --filter "@prisma/client"
+    # Client memory test suite
+    # Note: we run it last as DB is not isolated and will be dropped after memory tests, which in turn will fail subsequent tests.
+    # We should fix it in a similar way we did for functional tests, eventually.
+    pnpm run --filter "@prisma/client" test:memory
 fi
 
 # Disable printing with +x and return as before just after

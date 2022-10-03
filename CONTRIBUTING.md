@@ -28,7 +28,7 @@ Copy paste these commands to install the global dependencies:
 ```bash
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
 nvm install 16
-npm install --global pnpm@6 ts-node
+npm install --global pnpm@7 ts-node
 # For direnv see https://github.com/direnv/direnv/blob/master/docs/installation.md
 ```
 
@@ -93,7 +93,7 @@ pnpx prisma generate && pnpx ts-node index.ts
   cd reproductions
   mkdir my-repro
   cd my-repro
-  pnpm init -y
+  pnpm init
   pnpm add ../../packages/client
   pnpm add -D ../../packages/cli
   pnpm add -D typescript ts-node
@@ -250,7 +250,11 @@ List of directories in the monorepo
 - client
 - debug
 - engine-core
+- engines
+- fetch-engine
 - generator-helper
+- get-platform
+- instrumentation
 - integration-tests
 - internals
 - migrate

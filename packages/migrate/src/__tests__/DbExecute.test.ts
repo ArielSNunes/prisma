@@ -132,22 +132,19 @@ DROP TABLE 'test-dbexecute';`
     })
 
     // On Windows: snapshot output = "-- Drop & Create & Drop"
-    testIf(process.platform !== 'win32')(
-      'should pass with --stdin --schema',
-      async () => {
-        ctx.fixture('schema-only-sqlite')
+    testIf(process.platform !== 'win32')('should pass with --stdin --schema', async () => {
+      ctx.fixture('schema-only-sqlite')
 
-        const { stdout, stderr } = await exec(
-          `echo "${sqlScript}" | ${pathToBin} db execute --stdin --schema=./prisma/schema.prisma`,
-        )
-        expect(stderr).toBeFalsy()
-        expect(stdout).toMatchInlineSnapshot(`
+      const { stdout, stderr } = await exec(
+        `echo "${sqlScript}" | ${pathToBin} db execute --stdin --schema=./prisma/schema.prisma`,
+      )
+      expect(stderr).toBeFalsy()
+      expect(stdout).toMatchInlineSnapshot(`
                   Script executed successfully.
 
               `)
-      },
-      20_000,
-    )
+       // This is a slow test and macOS machine can be even slower and fail the test
+    }, 30_000)
 
     it('should pass with --file --schema', async () => {
       ctx.fixture('schema-only-sqlite')
@@ -217,19 +214,19 @@ COMMIT;`,
       await expect(result).resolves.toMatchInlineSnapshot(`Script executed successfully.`)
     })
 
-    it('should fail with P1014 error with --file --schema', async () => {
+    // TODO we could have a generic error code in prisma-engines for a "SQL error"
+    it('should fail with --file --schema if there is a database error', async () => {
       ctx.fixture('schema-only-sqlite')
-      expect.assertions(2)
+      expect.assertions(1)
 
       fs.writeFileSync('script.sql', 'DROP TABLE "test-doesnotexists";')
       try {
         await DbExecute.new().parse(['--schema=./prisma/schema.prisma', '--file=./script.sql'])
       } catch (e) {
-        expect(e.code).toEqual('P1014')
         expect(e.message).toMatchInlineSnapshot(`
-          P1014
+          SQLite database error
+          no such table: test-doesnotexists
 
-          The underlying table for model \`test-doesnotexists\` does not exist.
 
         `)
       }
@@ -245,6 +242,7 @@ COMMIT;`,
       } catch (e) {
         expect(e.code).toEqual(undefined)
         expect(e.message).toMatchInlineSnapshot(`
+          SQLite database error
           near "ThisisnotSQL": syntax error
 
 

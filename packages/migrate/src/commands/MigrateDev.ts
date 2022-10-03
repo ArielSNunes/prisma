@@ -1,6 +1,7 @@
 import Debug from '@prisma/debug'
 import {
   arg,
+  canPrompt,
   checkUnsupportedDataProxy,
   Command,
   format,
@@ -9,7 +10,6 @@ import {
   getDMMF,
   getSchemaPath,
   HelpError,
-  isCi,
   isError,
   loadEnvFile,
 } from '@prisma/internals'
@@ -146,8 +146,7 @@ ${chalk.bold('Examples')}
 
     if (devDiagnostic.action.tag === 'reset') {
       if (!args['--force']) {
-        // We use prompts.inject() for testing in our CI
-        if (isCi() && Boolean((prompt as any)._injected?.length) === false) {
+        if (!canPrompt()) {
           migrate.stop()
           throw new MigrateDevEnvNonInteractiveError()
         }
@@ -160,9 +159,8 @@ ${chalk.bold('Examples')}
         if (!confirmedReset) {
           console.info('Reset cancelled.')
           migrate.stop()
-          process.exit(0)
-          // For snapshot test, because exit() is mocked
-          return ``
+          // Return SIGINT exit code to signal that the process was cancelled.
+          process.exit(130)
         }
       }
 
@@ -224,8 +222,7 @@ ${chalk.bold('Examples')}
       console.info() // empty line
 
       if (!args['--force']) {
-        // We use prompts.inject() for testing in our CI
-        if (isCi() && Boolean((prompt as any)._injected?.length) === false) {
+        if (!canPrompt()) {
           migrate.stop()
           throw new MigrateDevEnvNonInteractiveError()
         }
@@ -240,8 +237,10 @@ ${chalk.bold('Examples')}
         })
 
         if (!confirmation.value) {
+          console.info('Migration cancelled.')
           migrate.stop()
-          return `Migration cancelled.`
+          // Return SIGINT exit code to signal that the process was cancelled.
+          process.exit(130)
         }
       }
     }
@@ -251,8 +250,10 @@ ${chalk.bold('Examples')}
       const getMigrationNameResult = await getMigrationName(args['--name'])
 
       if (getMigrationNameResult.userCancelled) {
+        console.log(getMigrationNameResult.userCancelled)
         migrate.stop()
-        return getMigrationNameResult.userCancelled
+        // Return SIGINT exit code to signal that the process was cancelled.
+        process.exit(130)
       } else {
         migrationName = getMigrationNameResult.name
       }
@@ -264,7 +265,7 @@ ${chalk.bold('Examples')}
         migrationsDirectoryPath: migrate.migrationsDirectoryPath!,
         migrationName: migrationName || '',
         draft: args['--create-only'] ? true : false,
-        prismaSchema: migrate.getDatamodel(),
+        prismaSchema: migrate.getPrismaSchema(),
       })
       debug({ createMigrationResult })
 
@@ -330,8 +331,7 @@ ${chalk.green('Your database is now in sync with your schema.')}`,
           if (successfulSeeding) {
             console.info(`\n${process.platform === 'win32' ? '' : '🌱  '}The seed command has been executed.\n`)
           } else {
-            // TODO: Should we exit 1 here like in db seed and migrate reset?
-            console.info() // empty line
+            process.exit(1)
           }
         } else {
           // Only used to help users to set up their seeds from old way to new package.json config

@@ -16,7 +16,8 @@ ${
     ? `
 const {
   Decimal,
-  objectEnumValues
+  objectEnumValues,
+  makeStrictEnum
 } = require('${runtimeDir}/${runtimeName}')
 `
     : `
@@ -26,6 +27,7 @@ const {
   PrismaClientRustPanicError,
   PrismaClientInitializationError,
   PrismaClientValidationError,
+  NotFoundError,
   decompressFromBase64,
   getPrismaClient,
   sqltag,
@@ -33,8 +35,9 @@ const {
   join,
   raw,
   Decimal,
-  DecimalJsLike,
-  objectEnumValues
+  Debug,
+  objectEnumValues,
+  makeStrictEnum
 } = require('${runtimeDir}/${runtimeName}')
 `
 }
@@ -57,6 +60,7 @@ Prisma.PrismaClientUnknownRequestError = ${notSupportOnBrowser('PrismaClientUnkn
 Prisma.PrismaClientRustPanicError = ${notSupportOnBrowser('PrismaClientRustPanicError', browser)}
 Prisma.PrismaClientInitializationError = ${notSupportOnBrowser('PrismaClientInitializationError', browser)}
 Prisma.PrismaClientValidationError = ${notSupportOnBrowser('PrismaClientValidationError', browser)}
+Prisma.NotFoundError = ${notSupportOnBrowser('NotFoundError', browser)}
 Prisma.Decimal = Decimal
 
 /**
@@ -110,6 +114,7 @@ export import PrismaClientUnknownRequestError = runtime.PrismaClientUnknownReque
 export import PrismaClientRustPanicError = runtime.PrismaClientRustPanicError
 export import PrismaClientInitializationError = runtime.PrismaClientInitializationError
 export import PrismaClientValidationError = runtime.PrismaClientValidationError
+export import NotFoundError = runtime.NotFoundError
 
 /**
  * Re-export of sql-template-tag
@@ -326,7 +331,7 @@ type IsObject<T extends any> = T extends Array<any>
 ? False
 : T extends Date
 ? False
-: T extends Buffer
+: T extends Uint8Array
 ? False
 : T extends BigInt
 ? False
@@ -522,6 +527,11 @@ type PickArray<T, K extends Array<keyof T>> = Prisma__Pick<T, TupleToUnion<K>>
  * Exclude all keys with underscores
  */
 type ExcludeUnderscoreKeys<T extends string> = T extends \`_$\{string}\` ? never : T
+
+
+export import FieldRef = runtime.FieldRef
+
+type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRef<Model, FieldType>
 
 ${
   !hideFetcher

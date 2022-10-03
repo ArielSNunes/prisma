@@ -1,4 +1,6 @@
+import { Context } from '@opentelemetry/api'
 import Debug from '@prisma/debug'
+import { getTraceParent, TracingConfig } from '@prisma/engine-core'
 import stripAnsi from 'strip-ansi'
 
 import {
@@ -7,12 +9,14 @@ import {
   PrismaClientRustPanicError,
   PrismaClientUnknownRequestError,
 } from '.'
+import { PrismaPromiseTransaction } from './core/request/PrismaPromise'
 import { DataLoader } from './DataLoader'
 import type { Client, Unpacker } from './getPrismaClient'
 import type { EngineMiddleware } from './MiddlewareHandler'
 import type { Document } from './query'
 import { Args, unpack } from './query'
-import { printStack } from './utils/printStack'
+import { CallSite } from './utils/CallSite'
+import { createErrorMessageWithContext } from './utils/createErrorMessageWithContext'
 import type { RejectOnNotFound } from './utils/rejectOnNotFound'
 import { throwIfNotFound } from './utils/rejectOnNotFound'
 
@@ -25,42 +29,49 @@ export type RequestParams = {
   typeName: string
   isList: boolean
   clientMethod: string
-  callsite?: string
+  callsite?: CallSite
   rejectOnNotFound?: RejectOnNotFound
-  runInTransaction?: boolean
+  transaction?: PrismaPromiseTransaction
   engineHook?: EngineMiddleware
   args: any
   headers?: Record<string, string>
-  transactionId?: string | number
   unpacker?: Unpacker
+  otelParentCtx?: Context
+  otelChildCtx?: Context
 }
 
 export type HandleErrorParams = {
   error: any
   clientMethod: string
-  callsite?: string
+  callsite?: CallSite
 }
 
 export type Request = {
   document: Document
-  runInTransaction?: boolean
-  transactionId?: string | number
+  transaction?: PrismaPromiseTransaction
   headers?: Record<string, string>
+  otelParentCtx?: Context
+  otelChildCtx?: Context
+  tracingConfig?: TracingConfig
 }
 
-function getRequestInfo(requests: Request[]) {
-  const txId = requests[0].transactionId
-  const inTx = requests[0].runInTransaction
-  const headers = requests[0].headers ?? {}
+function getRequestInfo(request: Request) {
+  const transaction = request.transaction
+  const headers = request.headers ?? {}
+  const traceparent = getTraceParent({ tracingConfig: request.tracingConfig })
 
-  // if the tx has a number for an id, then it's a regular batch tx
-  const _inTx = typeof txId === 'number' && inTx ? true : undefined
-  // if the tx has a string for id, it's an interactive transaction
-  const _txId = typeof txId === 'string' && inTx ? txId : undefined
+  if (transaction?.kind === 'itx') {
+    headers.transactionId = transaction.id
+  }
 
-  if (_txId !== undefined) headers.transactionId = _txId
+  if (traceparent !== undefined) {
+    headers.traceparent = traceparent
+  }
 
-  return { inTx: _inTx, headers }
+  return {
+    batchTransaction: transaction?.kind === 'batch' ? transaction : undefined,
+    headers,
+  }
 }
 
 export class RequestHandler {
@@ -73,20 +84,25 @@ export class RequestHandler {
     this.hooks = hooks
     this.dataloader = new DataLoader({
       batchLoader: (requests) => {
-        const info = getRequestInfo(requests)
+        const info = getRequestInfo(requests[0])
         const queries = requests.map((r) => String(r.document))
+        const traceparent = getTraceParent({ context: requests[0].otelParentCtx, tracingConfig: client._tracingConfig })
 
-        return this.client._engine.requestBatch(queries, info.headers, info.inTx)
+        if (traceparent) info.headers.traceparent = traceparent
+        // TODO: pass the child information to QE for it to issue links to queries
+        // const links = requests.map((r) => trace.getSpanContext(r.otelChildCtx!))
+
+        return this.client._engine.requestBatch(queries, info.headers, info.batchTransaction)
       },
       singleLoader: (request) => {
-        const info = getRequestInfo([request])
+        const info = getRequestInfo(request)
         const query = String(request.document)
 
         return this.client._engine.request(query, info.headers)
       },
       batchBy: (request) => {
-        if (request.transactionId) {
-          return `transaction-${request.transactionId}`
+        if (request.transaction?.id) {
+          return `transaction-${request.transaction.id}`
         }
 
         return batchFindUniqueBy(request)
@@ -103,12 +119,13 @@ export class RequestHandler {
     callsite,
     rejectOnNotFound,
     clientMethod,
-    runInTransaction,
     engineHook,
     args,
     headers,
-    transactionId,
+    transaction,
     unpacker,
+    otelParentCtx,
+    otelChildCtx,
   }: RequestParams) {
     if (this.hooks && this.hooks.beforeRequest) {
       const query = String(document)
@@ -132,18 +149,22 @@ export class RequestHandler {
         const result = await engineHook(
           {
             document,
-            runInTransaction,
+            runInTransaction: Boolean(transaction),
           },
-          (params) => this.dataloader.request(params),
+          (params) => {
+            return this.dataloader.request({ ...params, tracingConfig: this.client._tracingConfig })
+          },
         )
         data = result.data
         elapsed = result.elapsed
       } else {
         const result = await this.dataloader.request({
           document,
-          runInTransaction,
           headers,
-          transactionId,
+          transaction,
+          otelParentCtx,
+          otelChildCtx,
+          tracingConfig: this.client._tracingConfig,
         })
         data = result?.data
         elapsed = result?.elapsed
@@ -168,13 +189,13 @@ export class RequestHandler {
 
     let message = error.message
     if (callsite) {
-      const { stack } = printStack({
+      message = createErrorMessageWithContext({
         callsite,
         originalMethod: clientMethod,
-        onUs: error.isPanic,
+        isPanic: error.isPanic,
         showColors: this.client._errorFormat === 'pretty',
+        message,
       })
-      message = `${stack}\n  ${error.message}`
     }
 
     message = this.sanitizeMessage(message)

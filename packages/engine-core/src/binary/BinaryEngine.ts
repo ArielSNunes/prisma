@@ -17,25 +17,37 @@ import type { Readable } from 'stream'
 import { URL } from 'url'
 import { promisify } from 'util'
 
-import type { DatasourceOverwrite, EngineConfig, EngineEventType, GetConfigResult } from '../common/Engine'
+import type {
+  BatchTransactionOptions,
+  DatasourceOverwrite,
+  EngineConfig,
+  EngineEventType,
+  GetConfigResult,
+} from '../common/Engine'
 import { Engine } from '../common/Engine'
 import { PrismaClientInitializationError } from '../common/errors/PrismaClientInitializationError'
 import { PrismaClientKnownRequestError } from '../common/errors/PrismaClientKnownRequestError'
 import { PrismaClientRustError } from '../common/errors/PrismaClientRustError'
 import { PrismaClientRustPanicError } from '../common/errors/PrismaClientRustPanicError'
 import { PrismaClientUnknownRequestError } from '../common/errors/PrismaClientUnknownRequestError'
-import type { RequestError } from '../common/errors/types/RequestError'
 import { getErrorMessageWithLink } from '../common/errors/utils/getErrorMessageWithLink'
 import type { RustError, RustLog } from '../common/errors/utils/log'
 import { convertLog, getMessage, isRustError, isRustErrorLog } from '../common/errors/utils/log'
 import { prismaGraphQLToJSError } from '../common/errors/utils/prismaGraphQLToJSError'
 import { EngineMetricsOptions, Metrics, MetricsOptionsJson, MetricsOptionsPrometheus } from '../common/types/Metrics'
-import type { QueryEngineRequestHeaders, QueryEngineResult } from '../common/types/QueryEngine'
+import type {
+  EngineSpanEvent,
+  QueryEngineBatchRequest,
+  QueryEngineRequestHeaders,
+  QueryEngineResult,
+} from '../common/types/QueryEngine'
 import type * as Tx from '../common/types/Transaction'
 import { printGeneratorConfig } from '../common/utils/printGeneratorConfig'
-import { fixBinaryTargets, getRandomString, plusX } from '../common/utils/util'
+import { fixBinaryTargets, plusX } from '../common/utils/util'
 import byline from '../tools/byline'
 import { omit } from '../tools/omit'
+import { createSpan, getTraceParent, runInChildSpan } from '../tracing'
+import { TracingConfig } from '../tracing/getTracingConfig'
 import type { Result } from './Connection'
 import { Connection } from './Connection'
 
@@ -113,6 +125,7 @@ export class BinaryEngine extends Engine {
   private lastVersion?: string
   private lastActiveProvider?: ConnectorType
   private activeProvider?: string
+  private tracingConfig: TracingConfig
   /**
    * exiting is used to tell the .on('exit') hook, if the exit came from our script.
    * As soon as the Prisma binary returns a correct return code (like 1 or 0), we don't need this anymore
@@ -135,6 +148,7 @@ export class BinaryEngine extends Engine {
     allowTriggerPanic,
     dirname,
     activeProvider,
+    tracingConfig,
   }: EngineConfig) {
     super()
 
@@ -147,6 +161,7 @@ export class BinaryEngine extends Engine {
     this.prismaPath = process.env.PRISMA_QUERY_ENGINE_BINARY ?? prismaPath
     this.generator = generator
     this.datasources = datasources
+    this.tracingConfig = tracingConfig
     this.logEmitter = new EventEmitter()
     this.logEmitter.on('error', () => {
       // to prevent unhandled error events
@@ -468,32 +483,36 @@ ${chalk.dim("In case we're mistaken, please report this to us 🙏.")}`)
       await this.stopPromise
     }
 
-    if (!this.startPromise) {
-      this.startCount++
-      this.startPromise = this.internalStart()
+    const startFn = async () => {
+      if (!this.startPromise) {
+        this.startCount++
+        this.startPromise = this.internalStart()
+      }
+
+      await this.startPromise
+
+      if (!this.child && !this.engineEndpoint) {
+        throw new PrismaClientUnknownRequestError(
+          `Can't perform request, as the Engine has already been stopped`,
+          this.clientVersion!,
+        )
+      }
     }
 
-    await this.startPromise
-
-    if (!this.child && !this.engineEndpoint) {
-      throw new PrismaClientUnknownRequestError(
-        `Can't perform request, as the Engine has already been stopped`,
-        this.clientVersion!,
-      )
+    const spanOptions = {
+      name: 'connect',
+      enabled: this.tracingConfig.enabled && !this.startPromise,
     }
 
-    return this.startPromise
+    return runInChildSpan(spanOptions, startFn)
   }
 
   private getEngineEnvVars() {
     const env: any = {
       PRISMA_DML_PATH: this.datamodelPath,
-      RUST_BACKTRACE: '1',
-      RUST_LOG: 'info',
     }
 
     if (this.logQueries || this.logLevel === 'info') {
-      env.RUST_LOG = 'info'
       if (this.logQueries) {
         env.LOG_QUERIES = 'true'
       }
@@ -511,6 +530,9 @@ ${chalk.dim("In case we're mistaken, please report this to us 🙏.")}`)
       ...this.env, // user-provided env vars
       ...process.env,
       ...env,
+      // use value from process.env or use default
+      RUST_BACKTRACE: process.env.RUST_BACKTRACE ?? '1',
+      RUST_LOG: process.env.RUST_LOG ?? 'info',
     }
   }
 
@@ -550,7 +572,13 @@ ${chalk.dim("In case we're mistaken, please report this to us 🙏.")}`)
 
         const additionalFlag = this.allowTriggerPanic ? ['--debug'] : []
 
-        const flags = ['--enable-raw-queries', '--enable-metrics', ...this.flags, ...additionalFlag]
+        const flags = [
+          '--enable-raw-queries',
+          '--enable-metrics',
+          '--enable-open-telemetry',
+          ...this.flags,
+          ...additionalFlag,
+        ]
 
         this.port = await this.getFreePort()
         flags.push('--port', String(this.port))
@@ -589,9 +617,11 @@ ${chalk.dim("In case we're mistaken, please report this to us 🙏.")}`)
 
         byline(this.child.stdout).on('data', (msg) => {
           const data = String(msg)
+
           try {
             const json = JSON.parse(data)
             debug('stdout', getMessage(json))
+
             if (
               this.engineStartDeferred &&
               json.level === 'INFO' &&
@@ -607,6 +637,14 @@ ${chalk.dim("In case we're mistaken, please report this to us 🙏.")}`)
             // they could also be a RustError, which has is_panic
             // these logs can still include error logs
             if (typeof json.is_panic === 'undefined') {
+              if (json.span === true) {
+                if (this.tracingConfig.enabled === true) {
+                  void createSpan(json as EngineSpanEvent)
+                }
+
+                return
+              }
+
               const log = convertLog(json)
               // boolean cast needed, because of TS. We return ` is RustLog`, useful in other context, but not here
               const logIsRustErrorLog: boolean = isRustErrorLog(log)
@@ -750,11 +788,20 @@ You very likely have the wrong "binaryTarget" defined in the schema.prisma file.
   }
 
   async stop(): Promise<void> {
-    if (!this.stopPromise) {
-      this.stopPromise = this._stop()
+    const stopFn = async () => {
+      if (!this.stopPromise) {
+        this.stopPromise = this._stop()
+      }
+
+      return this.stopPromise
     }
 
-    return this.stopPromise
+    const spanOptions = {
+      name: 'disconnect',
+      enabled: this.tracingConfig.enabled,
+    }
+
+    return runInChildSpan(spanOptions, stopFn)
   }
 
   /**
@@ -776,17 +823,21 @@ You very likely have the wrong "binaryTarget" defined in the schema.prisma file.
     this.getConfigPromise = undefined
     let stopChildPromise
     if (this.child) {
-      debug(`Stopping Prisma engine4`)
+      debug(`Stopping Prisma engine`)
       if (this.startPromise) {
         debug(`Waiting for start promise`)
         await this.startPromise
       }
       debug(`Done waiting for start promise`)
-      stopChildPromise = new Promise((resolve, reject) => {
-        this.engineStopDeferred = { resolve, reject }
-      })
+      if (this.child.exitCode === null) {
+        stopChildPromise = new Promise((resolve, reject) => {
+          this.engineStopDeferred = { resolve, reject }
+        })
+      } else {
+        debug('Child already exited with code', this.child.exitCode)
+      }
       this.connection.close()
-      this.child?.kill()
+      this.child.kill()
       this.child = undefined
     }
     if (stopChildPromise) {
@@ -928,14 +979,15 @@ You very likely have the wrong "binaryTarget" defined in the schema.prisma file.
   async requestBatch<T>(
     queries: string[],
     headers: QueryEngineRequestHeaders = {},
-    transaction = false,
+    transaction?: BatchTransactionOptions,
     numTry = 1,
   ): Promise<QueryEngineResult<T>[]> {
     await this.start()
 
-    const request = {
+    const request: QueryEngineBatchRequest = {
       batch: queries.map((query) => ({ query, variables: {} })),
-      transaction,
+      transaction: Boolean(transaction),
+      isolationLevel: transaction?.isolationLevel,
     }
 
     this.lastQuery = JSON.stringify(request)
@@ -976,31 +1028,37 @@ You very likely have the wrong "binaryTarget" defined in the schema.prisma file.
   /**
    * Send START, COMMIT, or ROLLBACK to the Query Engine
    * @param action START, COMMIT, or ROLLBACK
+   * @param headers headers for tracing
    * @param options to change the default timeouts
    * @param info transaction information for the QE
    */
-  async transaction(action: 'start', options?: Tx.Options): Promise<Tx.Info>
-  async transaction(action: 'commit', info: Tx.Info): Promise<undefined>
-  async transaction(action: 'rollback', info: Tx.Info): Promise<undefined>
-  async transaction(action: any, arg?: any) {
+  async transaction(action: 'start', headers: Tx.TransactionHeaders, options?: Tx.Options): Promise<Tx.Info>
+  async transaction(action: 'commit', headers: Tx.TransactionHeaders, info: Tx.Info): Promise<undefined>
+  async transaction(action: 'rollback', headers: Tx.TransactionHeaders, info: Tx.Info): Promise<undefined>
+  async transaction(action: any, headers: Tx.TransactionHeaders, arg?: any) {
     await this.start()
 
     if (action === 'start') {
       const jsonOptions = JSON.stringify({
         max_wait: arg?.maxWait ?? 2000, // default
         timeout: arg?.timeout ?? 5000, // default
+        isolation_level: arg?.isolationLevel,
       })
 
       const result = await Connection.onHttpError(
-        this.connection.post<Tx.Info>('/transaction/start', jsonOptions),
-        transactionHttpErrorHandler,
+        this.connection.post<Tx.Info>('/transaction/start', jsonOptions, runtimeHeadersToHttpHeaders(headers)),
+        (result) => this.transactionHttpErrorHandler(result),
       )
 
       return result.data
     } else if (action === 'commit') {
-      await Connection.onHttpError(this.connection.post(`/transaction/${arg.id}/commit`), transactionHttpErrorHandler)
+      await Connection.onHttpError(this.connection.post(`/transaction/${arg.id}/commit`), (result) =>
+        this.transactionHttpErrorHandler(result),
+      )
     } else if (action === 'rollback') {
-      await Connection.onHttpError(this.connection.post(`/transaction/${arg.id}/rollback`), transactionHttpErrorHandler)
+      await Connection.onHttpError(this.connection.post(`/transaction/${arg.id}/rollback`), (result) =>
+        this.transactionHttpErrorHandler(result),
+      )
     }
 
     return undefined
@@ -1128,6 +1186,20 @@ Please look into the logs or turn on the env var DEBUG=* to debug the constantly
     )
     return response.data
   }
+
+  /**
+   * Decides how to handle error responses for transactions
+   * @param result
+   */
+  transactionHttpErrorHandler<R>(result: Result<R>): never {
+    const response = result.data as { [K: string]: unknown }
+    throw new PrismaClientKnownRequestError(
+      response.message as string,
+      response.error_code as string,
+      this.clientVersion as string,
+      response.meta,
+    )
+  }
 }
 
 // faster than creating a new object and JSON.stringify it all the time
@@ -1171,14 +1243,6 @@ function initHooks() {
     hookProcess('SIGTERM', true)
     hooksInitialized = true
   }
-}
-
-/**
- * Decides how to handle error responses for transactions
- * @param result
- */
-function transactionHttpErrorHandler<R>(result: Result<R>): never {
-  throw result.data
 }
 
 /**

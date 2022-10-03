@@ -1,21 +1,27 @@
+import { NewPrismaClient } from '../_utils/types'
 import testMatrix from './_matrix'
+// @ts-ignore
+import type { Prisma as PrismaNamespace, PrismaClient } from './node_modules/@prisma/client'
 
-// @ts-ignore this is just for type checks
-declare let prisma: import('@prisma/client').PrismaClient
+declare const newPrismaClient: NewPrismaClient<typeof PrismaClient>
+declare let Prisma: typeof PrismaNamespace
 
 testMatrix.setupTestSuite(
   () => {
     test('PrismaClientInitializationError for missing env', async () => {
-      expect.assertions(1)
-
-      try {
-        await prisma.$connect()
-      } catch (error) {
-        expect(error.constructor.name).toEqual('PrismaClientInitializationError')
-      } finally {
-        prisma.$disconnect().catch(() => undefined)
-      }
+      const prisma = newPrismaClient()
+      await expect(prisma.$connect()).rejects.toBeInstanceOf(Prisma.PrismaClientInitializationError)
     })
   },
-  { skipDb: true }, // So we can maually call connect for this test
+  {
+    skipDb: true,
+    skipDefaultClientInstance: true, // So we can manually call connect for this test
+    skipDataProxy: {
+      runtimes: ['node', 'edge'],
+      reason: `
+        Fails with Data Proxy: error is an instance of InvalidDatasourceError
+        instead of Prisma.PrismaClientInitializationError.
+      `,
+    },
+  },
 )

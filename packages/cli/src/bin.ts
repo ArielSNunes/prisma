@@ -57,6 +57,10 @@ process.on('uncaughtException', (e) => {
 process.on('unhandledRejection', (e) => {
   debug(e)
 })
+// Listen to Ctr + C and exit
+process.once('SIGINT', () => {
+  process.exit(130)
+})
 
 if (process.argv.length > 1 && process.argv[1].endsWith('prisma2')) {
   console.log(
@@ -144,16 +148,22 @@ async function main(): Promise<number> {
       'telemetry',
     ],
   )
-  // parse the arguments
-  const result = await cli.parse(commandArray)
 
+  // Execute the command
+  const result = await cli.parse(commandArray)
+  // Did it error?
   if (result instanceof HelpError) {
     console.error(result.message)
+    // TODO: We could do like Bash (and other)
+    // = return an exit status of 2 to indicate incorrect usage like invalid options or missing arguments.
+    // https://tldp.org/LDP/abs/html/exitcodes.html
     return 1
   } else if (isError(result)) {
     console.error(result)
     return 1
   }
+
+  // Success
   console.log(result)
 
   /**
@@ -175,10 +185,6 @@ async function main(): Promise<number> {
 
   return 0
 }
-
-process.on('SIGINT', () => {
-  process.exit(0) // now the "exit" event will fire
-})
 
 /**
  * Run our program
@@ -231,22 +237,45 @@ function handleIndividualError(error: Error): void {
  * `node_modules/@prisma/engines`
  */
 
+// macOS
 path.join(__dirname, '../../engines/query-engine-darwin')
 path.join(__dirname, '../../engines/introspection-engine-darwin')
+path.join(__dirname, '../../engines/migration-engine-darwin')
 path.join(__dirname, '../../engines/prisma-fmt-darwin')
+// Windows
+path.join(__dirname, '../../engines/query-engine-windows.exe')
+path.join(__dirname, '../../engines/introspection-engine-windows.exe')
+path.join(__dirname, '../../engines/migration-engine-windows.exe')
+path.join(__dirname, '../../engines/prisma-fmt-windows.exe')
 
+// Debian openssl-1.0.x
 path.join(__dirname, '../../engines/query-engine-debian-openssl-1.0.x')
 path.join(__dirname, '../../engines/introspection-engine-debian-openssl-1.0.x')
+path.join(__dirname, '../../engines/migration-engine-debian-openssl-1.0.x')
 path.join(__dirname, '../../engines/prisma-fmt-debian-openssl-1.0.x')
-
+// Debian openssl-1.1.x
 path.join(__dirname, '../../engines/query-engine-debian-openssl-1.1.x')
 path.join(__dirname, '../../engines/introspection-engine-debian-openssl-1.1.x')
+path.join(__dirname, '../../engines/migration-engine-debian-openssl-1.1.x')
 path.join(__dirname, '../../engines/prisma-fmt-debian-openssl-1.1.x')
+// Debian openssl-3.0.x
+path.join(__dirname, '../../engines/query-engine-debian-openssl-3.0.x')
+path.join(__dirname, '../../engines/introspection-engine-debian-openssl-3.0.x')
+path.join(__dirname, '../../engines/migration-engine-debian-openssl-3.0.x')
+path.join(__dirname, '../../engines/prisma-fmt-debian-openssl-3.0.x')
 
+// Red Hat Enterprise Linux openssl-1.0.x
 path.join(__dirname, '../../engines/query-engine-rhel-openssl-1.0.x')
 path.join(__dirname, '../../engines/introspection-engine-rhel-openssl-1.0.x')
+path.join(__dirname, '../../engines/migration-engine-rhel-openssl-1.0.x')
 path.join(__dirname, '../../engines/prisma-fmt-rhel-openssl-1.0.x')
-
+// Red Hat Enterprise Linux openssl-1.1.x
 path.join(__dirname, '../../engines/query-engine-rhel-openssl-1.1.x')
 path.join(__dirname, '../../engines/introspection-engine-rhel-openssl-1.1.x')
+path.join(__dirname, '../../engines/migration-engine-rhel-openssl-1.1.x')
 path.join(__dirname, '../../engines/prisma-fmt-rhel-openssl-1.1.x')
+// Red Hat Enterprise Linux openssl-3.0.x
+path.join(__dirname, '../../engines/query-engine-rhel-openssl-3.0.x')
+path.join(__dirname, '../../engines/introspection-engine-rhel-openssl-3.0.x')
+path.join(__dirname, '../../engines/migration-engine-rhel-openssl-3.0.x')
+path.join(__dirname, '../../engines/prisma-fmt-rhel-openssl-3.0.x')

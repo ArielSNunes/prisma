@@ -1,11 +1,11 @@
 import {
   arg,
+  canPrompt,
   checkUnsupportedDataProxy,
   Command,
   format,
   getSchemaPath,
   HelpError,
-  isCi,
   isError,
   loadEnvFile,
 } from '@prisma/internals'
@@ -103,8 +103,7 @@ ${chalk.bold('Examples')}
 
     console.info() // empty line
     if (!args['--force']) {
-      // We use prompts.inject() for testing in our CI
-      if (isCi() && Boolean((prompt as any)._injected?.length) === false) {
+      if (!canPrompt()) {
         throw new MigrateResetEnvNonInteractiveError()
       }
 
@@ -118,9 +117,8 @@ ${chalk.bold('Examples')}
 
       if (!confirmation.value) {
         console.info('Reset cancelled.')
-        process.exit(0)
-        // For snapshot test, because exit() is mocked
-        return ``
+        // Return SIGINT exit code to signal that the process was cancelled
+        process.exit(130)
       }
     }
 
@@ -168,8 +166,6 @@ The following migration(s) have been applied:\n\n${chalk(
           console.info(`\n${process.platform === 'win32' ? '' : '🌱  '}The seed command has been executed.`)
         } else {
           process.exit(1)
-          // For snapshot test, because exit() is mocked
-          return ``
         }
       } else {
         // Only used to help users to set up their seeds from old way to new package.json config

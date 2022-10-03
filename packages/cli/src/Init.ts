@@ -107,7 +107,7 @@ export class Init implements Command {
   ${chalk.bold('Options')}
     
              -h, --help   Display this help message
-  --datasource-provider   Define the datasource provider to use: PostgreSQL, MySQL, SQLite, SQL Server or MongoDB
+  --datasource-provider   Define the datasource provider to use: postgresql, mysql, sqlite, sqlserver, mongodb or cockroachdb
                   --url   Define a custom datasource url
 
   ${chalk.bold('Examples')}
@@ -272,7 +272,7 @@ export class Init implements Command {
     const steps: string[] = []
 
     if (provider === 'mongodb') {
-      steps.push(`Define models in the prisma.schema file.`)
+      steps.push(`Define models in the schema.prisma file.`)
     } else {
       steps.push(
         `Run ${chalk.green(

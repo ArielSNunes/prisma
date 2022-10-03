@@ -11,6 +11,11 @@ import { Datasources } from './Datasources'
 import type { Generatable } from './Generatable'
 
 function batchingTransactionDefinition(this: PrismaClientClass) {
+  const args = ['arg: [...P]']
+  if (this.dmmf.hasEnumInNamespace('TransactionIsolationLevel', 'prisma')) {
+    args.push('options?: { isolationLevel?: Prisma.TransactionIsolationLevel }')
+  }
+  const argsString = args.join(', ')
   return `
   /**
    * Allows the running of a sequence of read/write operations that are guaranteed to either succeed or fail as a whole.
@@ -25,7 +30,7 @@ function batchingTransactionDefinition(this: PrismaClientClass) {
    * 
    * Read more in our [docs](https://www.prisma.io/docs/concepts/components/prisma-client/transactions).
    */
-  $transaction<P extends PrismaPromise<any>[]>(arg: [...P]): Promise<UnwrapTuple<P>>;`
+  $transaction<P extends PrismaPromise<any>[]>(${argsString}): Promise<UnwrapTuple<P>>;`
 }
 
 function interactiveTransactionDefinition(this: PrismaClientClass) {
@@ -33,10 +38,15 @@ function interactiveTransactionDefinition(this: PrismaClientClass) {
     return ''
   }
 
-  const txOptions = `{ maxWait?: number, timeout?: number }`
+  const txOptions = ['maxWait?: number', 'timeout?: number']
 
+  if (this.dmmf.hasEnumInNamespace('TransactionIsolationLevel', 'prisma')) {
+    txOptions.push('isolationLevel?: Prisma.TransactionIsolationLevel')
+  }
+
+  const optionsType = `{${txOptions.join(', ')}}`
   return `
-  $transaction<R>(fn: (prisma: Prisma.TransactionClient) => Promise<R>, options?: ${txOptions}): Promise<R>;`
+  $transaction<R>(fn: (prisma: Prisma.TransactionClient) => Promise<R>, options?: ${optionsType}): Promise<R>;`
 }
 
 function queryRawDefinition(this: PrismaClientClass) {
@@ -179,7 +189,7 @@ export class PrismaClientClass implements Generatable {
 export class PrismaClient<
   T extends Prisma.PrismaClientOptions = Prisma.PrismaClientOptions,
   U = 'log' extends keyof T ? T['log'] extends Array<Prisma.LogLevel | Prisma.LogDefinition> ? Prisma.GetEvents<T['log']> : never : never,
-  GlobalReject = 'rejectOnNotFound' extends keyof T
+  GlobalReject extends Prisma.RejectOnNotFound | Prisma.RejectPerOperation | false | undefined = 'rejectOnNotFound' extends keyof T
     ? T['rejectOnNotFound']
     : false
       > {
@@ -303,7 +313,7 @@ export interface PrismaClientOptions {
    */
   rejectOnNotFound?: RejectOnNotFound | RejectPerOperation
   /**
-   * Overwrites the datasource url from your prisma.schema file
+   * Overwrites the datasource url from your schema.prisma file
    */
   datasources?: Datasources
 

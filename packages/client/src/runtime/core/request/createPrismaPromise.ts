@@ -1,7 +1,4 @@
-import type { Context } from '@opentelemetry/api'
-import { context } from '@opentelemetry/api'
-
-import type { PrismaPromise } from './PrismaPromise'
+import type { InteractiveTransactionOptions, PrismaPromise, PrismaPromiseTransaction } from './PrismaPromise'
 
 /**
  * Creates a [[PrismaPromise]]. It is Prisma's implementation of `Promise` which
@@ -13,16 +10,18 @@ import type { PrismaPromise } from './PrismaPromise'
  * @returns
  */
 export function createPrismaPromise(
-  callback: (txId?: string | number, lock?: PromiseLike<void>, otelCtx?: Context) => PrismaPromise<unknown>,
+  callback: (transaction?: PrismaPromiseTransaction, lock?: PromiseLike<void>) => PrismaPromise<unknown>,
 ): PrismaPromise<unknown> {
-  const otelCtx = context.active() // get the context at time of creation
-  // because otel isn't able to propagate context when inside of a promise
-
   let promise: PrismaPromise<unknown> | undefined
-  const _callback = (txId?: string | number, lock?: PromiseLike<void>) => {
+  const _callback = (transaction?: PrismaPromiseTransaction, lock?: PromiseLike<void>, cached = true) => {
     try {
-      // we allow the callback to be executed only one time
-      return (promise ??= callback(txId, lock, otelCtx))
+      // promises cannot be triggered twice after resolving
+      if (cached === true) {
+        return (promise ??= callback(transaction, lock))
+      }
+
+      // but for for batch tx we need to trigger them again
+      return callback(transaction, lock)
     } catch (error) {
       // if the callback throws, then we reject the promise
       // and that is because exceptions are not always async
@@ -31,25 +30,34 @@ export function createPrismaPromise(
   }
 
   return {
-    then(onFulfilled, onRejected, txId?: string) {
-      return _callback(txId).then(onFulfilled, onRejected, txId)
+    then(onFulfilled, onRejected, transaction?) {
+      return _callback(createItx(transaction), undefined).then(onFulfilled, onRejected, transaction)
     },
-    catch(onRejected, txId?: string) {
-      return _callback(txId).catch(onRejected, txId)
+    catch(onRejected, transaction?) {
+      return _callback(createItx(transaction), undefined).catch(onRejected, transaction)
     },
-    finally(onFinally, txId?: string) {
-      return _callback(txId).finally(onFinally, txId)
+    finally(onFinally, transaction?) {
+      return _callback(createItx(transaction), undefined).finally(onFinally, transaction)
     },
-    requestTransaction(txId: number, lock?: PromiseLike<void>) {
-      const promise = _callback(txId, lock)
+
+    requestTransaction(transactionOptions, lock?: PromiseLike<void>) {
+      const transaction = { kind: 'batch' as const, ...transactionOptions }
+      const promise = _callback(transaction, lock, false)
 
       if (promise.requestTransaction) {
         // we want to have support for nested promises
-        return promise.requestTransaction(txId, lock)
+        return promise.requestTransaction(transaction, lock)
       }
 
       return promise
     },
     [Symbol.toStringTag]: 'PrismaPromise',
   }
+}
+
+function createItx(transaction: InteractiveTransactionOptions | undefined): PrismaPromiseTransaction | undefined {
+  if (transaction) {
+    return { kind: 'itx', ...transaction }
+  }
+  return undefined
 }
